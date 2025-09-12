@@ -698,6 +698,15 @@ require('lazy').setup({
             },
           },
         },
+        basedpyright = {
+          settings = {
+            basedpyright = {
+              analysis = {
+                typeCheckingMode = 'strict',
+              },
+            },
+          },
+        },
       }
 
       -- Ensure the servers and tools above are installed
@@ -719,20 +728,25 @@ require('lazy').setup({
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
+      -- call mason-lspconfig setup without handlers
       require('mason-lspconfig').setup {
-        ensure_installed = {}, -- explicitly set to an empty table (Kickstart populates installs via mason-tool-installer)
+        ensure_installed = {}, -- Kickstart uses mason-tool-installer for installs
         automatic_installation = false,
-        handlers = {
-          function(server_name)
-            local server = servers[server_name] or {}
-            -- This handles overriding only values explicitly passed
-            -- by the server configuration above. Useful when disabling
-            -- certain features of an LSP (for example, turning off formatting for ts_ls)
-            server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
-            require('lspconfig')[server_name].setup(server)
-          end,
-        },
       }
+
+      -- ensure each server in `servers` gets registered with lspconfig (and gets your settings)
+      local lspconfig = require 'lspconfig'
+      for name, server in pairs(servers or {}) do
+        -- merge common capabilities (same as prior handler)
+        server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
+
+        -- For Neovim >= 0.11 use vim.lsp.config, otherwise fallback to lspconfig[name].setup
+        if vim.fn.has 'nvim-0.11' == 1 and vim.lsp and vim.lsp.config then
+          vim.lsp.config(name, server)
+        else
+          lspconfig[name].setup(server)
+        end
+      end
     end,
   },
 
